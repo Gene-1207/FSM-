@@ -20,3 +20,6 @@ A **Finite State Machine (FSM)** is a computational model used to represent a sy
 - Embedded systems and hardware controllers
 
 FSMs simplify complex system behavior by dividing it into clearly defined states and predictable transitions.
+
+TRY FSM SIMULATOR IN:
+https://gene-1207.github.io/FSM-/
