@@ -1,0 +1,172 @@
+<title>Junction Keeper</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@500&display=swap">
+<style>
+/* Layout: board (HUD, canvas, dispatch deck) on the left, controller panel on the right; one column on phones. */
+:root {
+  --bg: #e6eae7; --panel: #f4f6f3; --panel2: #e9eeea; --ink: #16211c; --muted: #55655c; --rule: #c6d0c9;
+  --accent: #1259a8; --accent-ink: #ffffff;
+  --grass: #bdd3b1; --block: #cddcc2; --asphalt: #4b5150; --curb: #d9ddd6; --lane: #f3f3ee; --yellowline: #e8b923;
+  --go: #1f9d55; --warn: #d99a00; --stop: #d33a2f; --prio: #2f6fe0;
+  --f-display: "Barlow Condensed", "Arial Narrow", sans-serif;
+  --f-ui: "IBM Plex Sans", system-ui, sans-serif;
+  --f-mono: "IBM Plex Mono", ui-monospace, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0f1412; --panel: #182019; --panel2: #202a23; --ink: #e4ebe6; --muted: #98a79e; --rule: #2d3832;
+    --accent: #5aa3ef; --accent-ink: #0a1420;
+    --grass: #1d2b21; --block: #243428; --asphalt: #2a2f2e; --curb: #59625c; --lane: #d6d8d2; --yellowline: #d3a623;
+    --prio: #4b8df0; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0f1412; --panel: #182019; --panel2: #202a23; --ink: #e4ebe6; --muted: #98a79e; --rule: #2d3832;
+  --accent: #5aa3ef; --accent-ink: #0a1420;
+  --grass: #1d2b21; --block: #243428; --asphalt: #2a2f2e; --curb: #59625c; --lane: #d6d8d2; --yellowline: #d3a623;
+  --prio: #4b8df0; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--ink); font: 400 14px/1.5 var(--f-ui); padding-inline: 16px; padding-block: 20px 32px; }
+.app { max-width: 1180px; margin-inline: auto; display: flex; flex-direction: column; gap: 18px; }
+h1, h2, h3 { font-family: var(--f-display); font-weight: 700; margin: 0; text-wrap: balance; }
+h1 { font-size: 40px; line-height: 1; letter-spacing: .02em; text-transform: uppercase; }
+.lede { margin: 6px 0 0; color: var(--muted); max-width: 62ch; }
+.mono { font-family: var(--f-mono); }
+.label { font: 500 11px/1.2 var(--f-mono); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.stage { display: grid; grid-template-columns: minmax(0, 760px) minmax(0, 1fr); gap: 20px; align-items: start; }
+@media (max-width: 1000px) { .stage { grid-template-columns: minmax(0, 1fr); } }
+.board, .card { background: var(--panel); border: 1px solid var(--rule); border-radius: 8px; }
+.board { display: flex; flex-direction: column; overflow: hidden; }
+.hud { display: flex; flex-wrap: wrap; gap: 14px 26px; padding: 12px 16px; border-bottom: 1px solid var(--rule); align-items: flex-end; }
+.stat { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.stat b { font: 600 30px/1 var(--f-display); font-variant-numeric: tabular-nums; letter-spacing: .01em; }
+.pips { display: flex; gap: 3px; height: 30px; align-items: flex-end; padding-bottom: 4px; }
+.pips i { width: 9px; height: 16px; border-radius: 2px; background: var(--accent); opacity: .15; }
+.banner { margin: 10px 12px 0; padding: 8px 12px; border-radius: 6px; border: 2px solid var(--prio); background: var(--panel2); display: flex; gap: 10px; align-items: center; font-weight: 500; animation: siren 0.7s steps(2) infinite; }
+.banner img { height: 22px; width: auto; flex: none; }
+@keyframes siren { 0% { border-color: var(--stop); } 100% { border-color: var(--prio); } }
+.canvas-wrap { position: relative; padding: 12px; }
+#cv { display: block; width: 100%; aspect-ratio: 1; border-radius: 4px; cursor: pointer; touch-action: manipulation; background: var(--grass); }
+.overlay { position: absolute; inset: 12px; display: flex; align-items: center; justify-content: center; padding: 16px; background: color-mix(in srgb, var(--bg) 62%, transparent); border-radius: 4px; }
+.overlay[hidden] { display: none; }
+.sheet { background: var(--panel); border: 1px solid var(--rule); border-radius: 8px; padding: 20px; max-width: 440px; width: 100%; display: flex; flex-direction: column; gap: 12px; max-height: 100%; overflow: auto; }
+.sheet h2 { font-size: 30px; text-transform: uppercase; letter-spacing: .02em; line-height: 1.05; }
+.sheet p, .sheet ul { margin: 0; }
+.sheet ul { padding-left: 18px; display: flex; flex-direction: column; gap: 4px; color: var(--muted); }
+.row { display: flex; flex-wrap: wrap; gap: 8px; }
+.btn { font: 600 14px/1 var(--f-ui); padding: 11px 14px; border: 1px solid var(--rule); background: var(--panel2); color: var(--ink); border-radius: 6px; cursor: pointer; }
+.btn:hover { border-color: var(--muted); }
+.btn.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.btn:focus-visible, #cv:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+.deck { border-top: 1px solid var(--rule); padding: 14px 16px 16px; display: flex; flex-direction: column; gap: 12px; }
+.deck-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: stretch; }
+.type { display: flex; align-items: center; gap: 10px; padding: 8px 12px; min-width: 0; text-align: left; }
+.type img { width: 54px; height: auto; flex: none; }
+.type span { display: flex; flex-direction: column; gap: 2px; }
+.type small { font: 500 11px var(--f-mono); color: var(--muted); letter-spacing: .04em; }
+.type[aria-pressed="true"] { border-color: var(--accent); box-shadow: inset 0 0 0 2px var(--accent); }
+.type.low { opacity: .55; }
+.road { flex: 1 1 110px; display: flex; flex-direction: column; align-items: flex-start; gap: 4px; padding: 10px 12px; }
+.road strong { font: 700 20px/1 var(--f-display); letter-spacing: .03em; text-transform: uppercase; }
+.road small { font: 500 11px var(--f-mono); color: var(--muted); }
+.tools { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: space-between; }
+.toast { min-height: 20px; font: 500 12px var(--f-mono); color: var(--muted); }
+.hint { color: var(--muted); font-size: 12px; margin: 0; }
+.side { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.card { padding: 14px 16px; display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.card h2 { font-size: 22px; letter-spacing: .03em; text-transform: uppercase; }
+#fsm { width: 100%; height: auto; display: block; }
+#fsm .n rect { fill: var(--panel2); stroke: var(--rule); stroke-width: 1.5; }
+#fsm .n text { fill: var(--ink); font: 600 11px var(--f-ui); text-anchor: middle; }
+#fsm .n text.sub { font: 500 9px var(--f-mono); fill: var(--muted); letter-spacing: .04em; }
+#fsm .n.g.on rect { fill: var(--go); stroke: var(--go); } #fsm .n.y.on rect { fill: var(--warn); stroke: var(--warn); }
+#fsm .n.r.on rect { fill: var(--stop); stroke: var(--stop); } #fsm .n.p.on rect { fill: var(--prio); stroke: var(--prio); }
+#fsm .n.g.on text, #fsm .n.r.on text, #fsm .n.p.on text { fill: #fff; } #fsm .n.y.on text { fill: #1b1400; }
+#fsm .n.on text.sub { fill: inherit; opacity: .85; }
+#fsm .n.p rect { stroke-dasharray: 4 3; } #fsm .n.p.on rect { stroke-dasharray: none; }
+#fsm .e { stroke: var(--muted); stroke-width: 1.4; fill: none; }
+#fsm .e.p { stroke: var(--prio); stroke-dasharray: 4 3; }
+.readout { display: flex; flex-wrap: wrap; gap: 6px 16px; align-items: center; }
+.lamps { display: flex; gap: 14px; }
+.lamp { display: flex; gap: 6px; align-items: center; font: 500 12px var(--f-mono); }
+.lamp i { width: 14px; height: 14px; border-radius: 50%; background: var(--stop); box-shadow: 0 0 0 2px var(--rule); }
+.lamp i.G { background: var(--go); } .lamp i.Y { background: var(--warn); } .lamp i.R { background: var(--stop); }
+.why { margin: 0; color: var(--muted); }
+.log { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; font-size: 12.5px; }
+.log li { display: grid; grid-template-columns: 38px minmax(0, 1fr); gap: 8px; }
+.log time { font: 500 11px/1.7 var(--f-mono); color: var(--muted); font-variant-numeric: tabular-nums; }
+.log .empty { color: var(--muted); display: block; }
+details summary { cursor: pointer; font-weight: 600; }
+details ul { margin: 8px 0 0; padding-left: 18px; display: flex; flex-direction: column; gap: 5px; color: var(--muted); }
+.stars { font-size: 28px; letter-spacing: 4px; color: var(--warn); }
+.res { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 16px; }
+@media (prefers-reduced-motion: reduce) { .banner { animation: none; } }
+</style>
+
+<main class="app">
+  <header>
+    <h1>Junction Keeper</h1>
+    <p class="lede">You choose which vehicles enter the junction and from which road. A signal controller (a finite state machine) decides who goes, so nothing collides, and it clears the way for ambulances. Traffic keeps left.</p>
+  </header>
+  <div class="stage">
+    <section class="board" aria-label="Junction game">
+      <div class="hud">
+        <div class="stat"><span class="label">Score</span><b id="sScore">0</b></div>
+        <div class="stat"><span class="label" id="sTimeL">Shift</span><b id="sTime">3:00</b></div>
+        <div class="stat"><span class="label">Flow bonus</span><b id="sFlow">&times;1</b></div>
+        <div class="stat"><span class="label">Dispatch energy</span><div class="pips" id="sEnergy"></div></div>
+        <div class="stat"><span class="label">Collisions</span><b id="sCol">0</b></div>
+      </div>
+      <div id="banner" class="banner" hidden></div>
+      <div class="canvas-wrap">
+        <canvas id="cv" tabindex="0" aria-label="Four-way junction. Click a road to send the selected vehicle."></canvas>
+        <div id="overlay" class="overlay"></div>
+      </div>
+      <div class="deck">
+        <div class="deck-row" id="types" role="group" aria-label="Vehicle to send"></div>
+        <div class="deck-row" id="roads" role="group" aria-label="Road to send from"></div>
+        <div class="tools">
+          <div class="row">
+            <button class="btn" id="bPause" type="button">Pause</button>
+            <button class="btn" id="bSpeed" type="button">Speed &times;1</button>
+            <button class="btn" id="bBurst" type="button">Rush burst</button>
+            <button class="btn" id="bReset" type="button">Restart</button>
+          </div>
+          <div class="toast" id="toast" role="status" aria-live="polite"></div>
+        </div>
+        <p class="hint">Pick a vehicle, then press a road button, click a road on the map, or use the arrow keys. Keys 1, 2, 3 pick the vehicle, P pauses.</p>
+      </div>
+    </section>
+    <aside class="side">
+      <section class="card" aria-label="Signal controller">
+        <h2>Signal controller</h2>
+        <svg id="fsm" viewBox="0 0 360 260" role="img" aria-label="State diagram of the signal controller"></svg>
+        <div class="readout">
+          <div class="lamps"><span class="lamp"><i id="lN" class="R"></i>N&ndash;S</span><span class="lamp"><i id="lE" class="R"></i>E&ndash;W</span></div>
+          <span class="mono" id="stName"></span>
+        </div>
+        <p class="why" id="stWhy"></p>
+      </section>
+      <section class="card" aria-label="Recent decisions">
+        <h2>Recent decisions</h2>
+        <ol class="log" id="log"></ol>
+      </section>
+      <section class="card">
+        <details>
+          <summary>How the controller decides</summary>
+          <ul>
+            <li>Green lasts at least 5 s and at most 14 s, and only ends when the other road has vehicles waiting.</li>
+            <li>Yellow lasts 1.4 s. All red follows and waits until the junction box is empty, so nobody is inside when the crossing road starts.</li>
+            <li>Ambulance on the road that has green: green is held until it clears. On the crossing road: green ends early, the junction clears, then it gets green.</li>
+            <li>Vehicles brake for red lights and for the vehicle ahead. One too close to stop when yellow starts finishes crossing, and all red waits for it.</li>
+          </ul>
+        </details>
+      </section>
+    </aside>
+  </div>
+</main>
+<script>
+(() => {
+'use strict';
